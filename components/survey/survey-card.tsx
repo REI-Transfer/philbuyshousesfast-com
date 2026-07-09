@@ -511,12 +511,12 @@ export function SurveyCard({ phoneDisplay = "(800) 000-0000", phoneHref = "80000
     <div className="w-full rounded-2xl border border-gray-200 bg-white p-6 shadow-lg">
       <div className="flex flex-col gap-5">
         {/* Progress indicator */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-0">
           <div className="flex items-center gap-2">
             <Home className="h-5 w-5 text-[var(--accent)]" />
             <span className="text-sm text-gray-600">Step {step} of {totalSteps}</span>
           </div>
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1">
             {Array.from({ length: totalSteps }).map((_, i) => (
               <div
                 key={i}
