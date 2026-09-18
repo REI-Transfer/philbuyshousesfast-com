@@ -147,6 +147,36 @@
     "description": "n8n lead handler webhook. Format: https://n8n.srv1197128.hstgr.cloud/webhook/lead-{slug}."
   },
   {
+    "name": "GOFUNNEL_WEBHOOK_CREDENTIAL_ID",
+    "type": "string",
+    "required": false,
+    "scope": "server",
+    "default": "",
+    "description": "GoFunnel external / custom-webhook credential id. Per-client. When set together with GOFUNNEL_WEBHOOK_SECRET, /api/submit forwards each COMPLETED lead (lead_stage='complete' only) to GoFunnel (type=survey_submitted) alongside the n8n webhook. Blank/unset disables the forward. No code fallback: must be set on the Vercel project."
+  },
+  {
+    "name": "GOFUNNEL_WEBHOOK_SECRET",
+    "type": "string",
+    "required": false,
+    "scope": "server",
+    "default": "",
+    "description": "Bearer secret for the GoFunnel external webhook (pairs with GOFUNNEL_WEBHOOK_CREDENTIAL_ID). Blank/unset disables the forward. No code fallback: must be set on the Vercel project."
+  },
+  {
+    "name": "WEBHOOK_URL_EARLY",
+    "type": "string",
+    "required": false,
+    "scope": "server",
+    "description": "Optional. Two-step form: receives lead_stage='early' (stage 1 contact details). Unset: falls back to WEBHOOK_URL."
+  },
+  {
+    "name": "WEBHOOK_URL_COMPLETE",
+    "type": "string",
+    "required": false,
+    "scope": "server",
+    "description": "Optional. Two-step form: receives lead_stage='complete' (final answers) and lead_stage='disqualified' (stage-2 hard DQ). Unset: falls back to WEBHOOK_URL."
+  },
+  {
     "name": "NEXT_PUBLIC_GOOGLE_PLACES_API_KEY",
     "type": "string",
     "required": true,

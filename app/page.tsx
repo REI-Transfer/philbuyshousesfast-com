@@ -78,6 +78,7 @@ export default function HomePage() {
               serviceAreas={parsedServiceAreas}
               disqualifiedPropertyTypes={disqualifiedPropertyTypes}
               motivationV2={config.motivationV2}
+              companyName={config.companyName}
             />
           </div>
 

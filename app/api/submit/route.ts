@@ -6,7 +6,9 @@ const submissionLog = new Map<string, { count: number; firstSubmit: number }>()
 function isRateLimited(ip: string): boolean {
   const now = Date.now()
   const window = 60 * 60 * 1000 // 1 hour
-  const maxSubmissions = 3
+  // Max 6 per IP per hour: the two-step form sends 2 calls per person
+  // (lead_stage 'early' + 'complete'), so 6 keeps the old 3-people headroom.
+  const maxSubmissions = 6
 
   const entry = submissionLog.get(ip)
   if (!entry) {
@@ -30,7 +32,7 @@ export async function POST(request: Request) {
       || request.headers.get("x-real-ip")
       || "unknown"
 
-    // Rate limit: max 3 submissions per IP per hour
+    // Rate limit: max 6 submissions per IP per hour
     if (isRateLimited(ip)) {
       return NextResponse.json(
         { success: false, error: "Too many submissions. Please try again later." },
@@ -39,8 +41,14 @@ export async function POST(request: Request) {
     }
 
     const data = await request.json()
+    // Two-step form: 'early' (stage 1 contact details), 'complete' (final
+    // answers) or 'disqualified' (stage-2 hard DQ). Anything else, including a
+    // missing value, is treated as 'complete' so older callers keep today's behavior.
+    const stage: "early" | "complete" | "disqualified" =
+      data.lead_stage === "early" ? "early" : data.lead_stage === "disqualified" ? "disqualified" : "complete"
 
-    // Server-side validation
+    // Server-side validation (all stages: stage 1 already collects name,
+    // email, phone and address)
     const phone = (data.phone || "").replace(/\D/g, "").replace(/^1/, "")
     if (phone.length !== 10) {
       return NextResponse.json({ success: false, error: "Invalid phone" }, { status: 400 })
@@ -59,10 +67,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Address required" }, { status: 400 })
     }
 
-    // Add server IP to payload
-    const payload = { ...data, server_ip: ip }
+    // Add server IP + normalized lead_stage to payload
+    const payload = { ...data, server_ip: ip, lead_stage: stage }
 
-    const webhookUrl = process.env.WEBHOOK_URL
+    // Webhook routing: same WEBHOOK_URL for every stage by default (n8n branches
+    // on `lead_stage`). Optional per-stage overrides: WEBHOOK_URL_EARLY /
+    // WEBHOOK_URL_COMPLETE (the latter also receives 'disqualified').
+    const webhookUrl = stage === "early"
+      ? (process.env.WEBHOOK_URL_EARLY || process.env.WEBHOOK_URL)
+      : (process.env.WEBHOOK_URL_COMPLETE || process.env.WEBHOOK_URL)
     if (webhookUrl) {
       await fetch(webhookUrl, {
         method: "POST",
@@ -72,10 +85,15 @@ export async function POST(request: Request) {
     }
 
     // --- GoFunnel external webhook: forward the lead for gf_sid attribution ---
+    // Env-var-driven: credentials come ONLY from GOFUNNEL_WEBHOOK_CREDENTIAL_ID /
+    // _SECRET (set on the Vercel project). When unset, the forward is skipped.
+    // Runs for the COMPLETE stage only.
     try {
-      const GF_CREDENTIAL_ID = process.env.GOFUNNEL_WEBHOOK_CREDENTIAL_ID || "35b30276-5c66-4ece-8bd4-db170479a836"
-      const GF_BEARER = process.env.GOFUNNEL_WEBHOOK_SECRET || "c562f30b-927d-41bf-9745-6eedd05a8116"
-      if (GF_CREDENTIAL_ID && GF_BEARER) {
+      const GF_CREDENTIAL_ID = process.env.GOFUNNEL_WEBHOOK_CREDENTIAL_ID || ""
+      const GF_BEARER = process.env.GOFUNNEL_WEBHOOK_SECRET || ""
+      // Server-side Meta events only for the finished survey (William, 2026-09-18):
+      // no GoFunnel forward for stage 1 partials or stage-2 disqualified sellers.
+      if (stage === "complete" && GF_CREDENTIAL_ID && GF_BEARER) {
         const gfCookie = request.headers.get("cookie") || ""
         const gfMatch = gfCookie.match(/(?:^|; )gf_sid=([^;]*)/)
         const gfSid = (data.gf_sid || (gfMatch ? decodeURIComponent(gfMatch[1]) : "") || "").toString().trim()
@@ -132,7 +150,7 @@ export async function POST(request: Request) {
       }
     } catch {}
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, stage })
   } catch {
     return NextResponse.json({ success: false }, { status: 500 })
   }
